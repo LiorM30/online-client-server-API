@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class Player_Commands(str, Enum):
+class Player_Commands(str, Enum):  # inhereting from str to make serializeble
     MOVE_UP = 'move up'
     MOVE_DOWN = 'move down'
     MOVE_LEFT = 'move left'
@@ -22,5 +22,15 @@ class Player_Commands(str, Enum):
     STOP_SHOOT_LEFT = 'stop shoot left'
     STOP_SHOOT_RIGHT = 'stop shoot right'
 
-    PLAYER_QUIT = 'player quit'
     QUIT = 'quit'
+
+
+class Directions(Enum):
+    UP = 'up'
+    DOWN = 'down'
+    LEFT = 'left'
+    RIGHT = 'right'
+
+
+class Game_Objects(str, Enum):
+    Player = 'player'
