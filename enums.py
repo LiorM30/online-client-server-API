@@ -34,3 +34,7 @@ class Directions(Enum):
 
 class Game_Objects(str, Enum):
     Player = 'player'
+
+
+class Game_Comm_API(str, Enum):
+    REQUEST_SPRITES = 'request sprites'

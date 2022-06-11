@@ -1,19 +1,46 @@
 import socket
 import pickle
+import json
+from time import sleep
 import pygame
 import io
+import logging
+import argparse
 
 from enums import Game_Objects, Player_Commands
 
 
 class Online_Game_Client:
     def __init__(self, server_ip, server_port) -> None:
+        self._parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+        self._parser.add_argument(
+            '--log_level', action='store', type=int, default=20,
+            help='Log level (50=Critical, 40=Error, 30=Warning ,20=Info ,10=Debug, 0=None)'
+        )
+        self._args = self._parser.parse_args()
+
+        logging.basicConfig(
+            level=self._args.log_level,
+            format='[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(module)s] [%(funcName)s]: %(message)s',  # noqa
+            datefmt='%d-%m-%Y %H:%M:%S',
+            filename='game_logs.log'
+        )
+
+        logging.getLogger().addHandler(logging.StreamHandler())
+
+        self._logger = logging.getLogger()
+
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_sock.connect((server_ip, server_port))
-        print('client connected')
+        self._logger.debug('Connected to server')
 
         self._username = input('enter your username:  ')
         self.client_sock.send(self._username.encode())
+
+        if self.client_sock.recv(1024).decode == 'start':
+            pass
 
         pygame.init()
         self._screen = pygame.display.set_mode(
@@ -46,7 +73,8 @@ class Online_Game_Client:
                 'move y': None,
                 'status': None
             }
-            self._clock.tick(30)  # setting game FPS
+            # self._clock.tick(30)  # setting game FPS
+            sleep(1/30)
 
             for event in pygame.event.get():
                 # this one checks for the window being closed
@@ -92,26 +120,17 @@ class Online_Game_Client:
                             inputs['move y'] = Player_Commands.STOP_MOVE_UP
                         case pygame.K_s:
                             inputs['move y'] = Player_Commands.STOP_MOVE_DOWN
-            
-            # keys = pygame.key.get_pressed()
-            # if not (keys[pygame.K_a] and keys[pygame.K_d]):
-            #     if keys[pygame.K_a]:
-            #         inputs['move x'] = Player_Commands.MOVE_LEFT
-            #     elif keys[pygame.K_d]:
-            #         inputs['move x'] = Player_Commands.MOVE_RIGHT
-            # if not (keys[pygame.K_w] and keys[pygame.K_s]):
-            #     if keys[pygame.K_w]:
-            #         inputs['move x'] = Player_Commands.MOVE_UP
-            #     elif keys[pygame.K_s]:
-            #         inputs['move x'] = Player_Commands.MOVE_DOWN
 
             if inputs['status'] == Player_Commands.QUIT:  # if player quits, stop game
                 self._running = False
             if not all(value is None for value in inputs.values()):
                 self._send_data(inputs)
 
-            # print('Getting sprites')
-            sprites_to_load = pickle.loads(self.client_sock.recv(4096))
+            raw_data = self.client_sock.recv(1024).decode()
+            print(f'data: {raw_data}')
+            sprites_to_load = json.loads(raw_data)['game']
+            print(f'sprites: {sprites_to_load}')
+            # sprites_to_load = pickle.loads(self.client_sock.recv(4096))
             self._screen.fill((0, 0, 0))
             self._render_sprites(sprites_to_load)
             pygame.display.flip()
@@ -123,17 +142,17 @@ class Online_Game_Client:
         ...
         :param data: the data to send
         """
-        ser_data = pickle.dumps(data)
-        self.client_sock.send(ser_data)
+        ser_data = json.dumps(data)
+        self.client_sock.send(ser_data.encode())
 
     def _render_sprites(self, sprites: list):
-        # print(f'Rendering sprites')
         for sprite, coords in sprites:
             self._draw_object(sprite, coords)
 
     def _draw_object(self, object: Game_Objects, coords: tuple[int, int]) -> None:
         self._screen.blit(self._all_sprites[object], coords)
-
+    
+    # def _request_sprites(self) -> None:
 
 
 

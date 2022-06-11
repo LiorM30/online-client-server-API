@@ -1,9 +1,12 @@
 import pickle
+import json
 import socket
 import threading
 import pygame
 from dataclasses import dataclass
 from time import sleep
+import logging
+import argparse
 
 from enums import Directions, Player_Commands, Game_Objects
 from sprites import Player as Player_Sprite
@@ -24,9 +27,29 @@ class Request:
 
 class Online_Game_Server:
     def __init__(self, IP, port) -> None:
+        self._parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+        self._parser.add_argument(
+            '--log_level', action='store', type=int, default=20,
+            help='Log level (50=Critical, 40=Error, 30=Warning ,20=Info ,10=Debug, 0=None)'
+        )
+        self._args = self._parser.parse_args()
+
+        logging.basicConfig(
+            level=self._args.log_level,
+            format='[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(module)s] [%(funcName)s]: %(message)s',  # noqa
+            datefmt='%d-%m-%Y %H:%M:%S',
+            filename='game_logs.log'
+        )
+
+        logging.getLogger().addHandler(logging.StreamHandler())
+
+        self._logger = logging.getLogger()
+
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_sock.bind((IP, port))
-        print('Server is up and running')
+        self._logger.debug('Server is up and running')
 
         self._players = {}
         self._threads: list[threading.Thread] = []
@@ -37,6 +60,14 @@ class Online_Game_Server:
         self._sprites_to_send = []
 
         self._get_clients()
+        self._logger.debug('Got all clients')
+
+        for ID, player in self._players.items():
+            player.sock.send('start'.encode())
+
+        self._num_of_sends = 0
+
+        self._lock = threading.Lock()
 
     def _get_clients(self) -> None:
         """
@@ -47,10 +78,8 @@ class Online_Game_Server:
         while True:
             self.server_sock.listen()
             client, client_address = self.server_sock.accept()
-            print('Client connected', end='')
-
             username = client.recv(1024).decode()
-            print(f', Name:  {username}')
+            self._logger.debug(f'Client {username} connected')
 
             new_player = Player(
                 username=username,
@@ -73,7 +102,7 @@ class Online_Game_Server:
             )
 
             currentID += 1
-            if len(self._players) == 2:
+            if len(self._players) == 1:
                 break
 
     def _handle_player(self, player: Player):
@@ -85,10 +114,13 @@ class Online_Game_Server:
         """
         try:
             while True:
-                message = pickle.loads(player.sock.recv(1024))
+                # message = pickle.loads(player.sock.recv(1024))
+                message = json.loads(player.sock.recv(1024).decode())
                 if message['status'] == Player_Commands.QUIT:
                     player.sock.close()
-                    print(f'Client disconnected, name: {player.username}')
+                    self._logger.debug(
+                        f'Client disconnected, name: {player.username}'
+                    )
                     break
 
                 for key, val in message.items():
@@ -97,15 +129,14 @@ class Online_Game_Server:
                             Request(val, player.ID)
                         )
                         print(val)
+                
+                
 
-                self._requests.append(
-                    Request(message, player.ID)
-                )
         except ConnectionResetError:
-            print(f'Player {player.username} has disconnected')
+            self._logger.debug(f'Player {player.username} has disconnected')
             self._players.pop(player.ID)
 
-    def _send_data(self, client: socket.socket, data: dict):
+    def _send_data(self, client: socket.socket, data: dict) -> None:
         """
         Sends data to the client
         The data is a dictionary of all sprites and their location
@@ -113,14 +144,18 @@ class Online_Game_Server:
         :param client: the client to send to
         :param data: the data to send
         """
-        ser_data = pickle.dumps(data)
-        client.send(ser_data)
+        ser_data = json.dumps({'game': data})
+        client.send(ser_data.encode())
+        self._num_of_sends += 1
+        print(self._num_of_sends)
 
     def mainloop(self) -> None:
         """
         The mainloop of the program, call to run it
         """
-        print('In mainloop')
+
+        self._logger.debug('In mainloop')
+
         for t in self._threads:
             t.start()
         while True:
@@ -149,19 +184,20 @@ class Online_Game_Server:
                             self._player_sprites[player_ID].change_x_speed(-10)
 
                 self._requests.clear()  # clear events list after iterating through them
+
+            self._lock.acquire()  # locking all threads so they dont send the clients unupdated sprites/not the full list
             for ID, sprite in self._player_sprites.items():
                 sprite.update()
 
+            self._sprites_to_send.clear()
             for player_ID, sprite in self._player_sprites.items():
                 self._sprites_to_send.append(
-                    (Game_Objects.Player, sprite.get_coords())
+                    [Game_Objects.Player, list(sprite.get_coords())]
                 )
+            self._lock.release()
 
             for ID, player in self._players.items():
-                print(f'Sending data to {player.username}')
                 self._send_data(player.sock, self._sprites_to_send)
-                self._sprites_to_send.clear()
-
             sleep(1/30)
 
 
