@@ -1,4 +1,5 @@
 import json
+from pydoc import cli
 import socket
 import threading
 import pygame
@@ -63,6 +64,12 @@ class Online_Game_Server:
         self._logger.debug('Got all clients')
 
         for ID, player in self._players.items():
+            self._send_data(
+                player.sock,
+                Game_Packet(
+                    type=Game_Packet_Type.START_GAME
+                )
+            )
             player.sock.send('start'.encode())
 
         self._num_of_sends = 0
@@ -78,7 +85,7 @@ class Online_Game_Server:
         while True:
             self.server_sock.listen()
             client, client_address = self.server_sock.accept()
-            username = client.recv(1024).decode()
+            username = self._recieve_packet(client)['data']['username']
             self._logger.debug(f'Client {username} connected')
 
             new_player = Player(
@@ -114,7 +121,7 @@ class Online_Game_Server:
         """
         try:
             while True:
-                packet = json.loads(player.sock.recv(1024).decode())
+                packet = self._recieve_packet(player.sock)
                 if packet['type'] == Game_Packet_Type.PLAYER_INPUTS:
                     if packet['data']['status'] == Player_Commands.QUIT:
                         player.sock.close()
@@ -154,6 +161,11 @@ class Online_Game_Server:
         ser_data = json.dumps(vars(data))
         client.send(ser_data.encode())
 
+    def _recieve_packet(self, client: socket.socket) -> Game_Packet:
+        return json.loads(
+            client.recv(1024).decode()
+        )
+
     def mainloop(self) -> None:
         """
         The mainloop of the program, call to run it
@@ -165,8 +177,6 @@ class Online_Game_Server:
             t.start()
         while True:
             if self._requests:
-                # for request in self._requests:
-                #     print(request.type)
                 for request in self._requests:
                     player_ID = request.player_ID
                     match request.type:

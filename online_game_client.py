@@ -41,15 +41,21 @@ class Online_Game_Client:
         self._logger.debug('Connected to server')
 
         self._username = input('enter your username:  ')
-        self.client_sock.send(self._username.encode())
+        self._send_data(
+            Game_Packet(
+                type=Game_Packet_Type.STANDARD_DATA,
+                data={'username': self._username}
+            )
+        )
 
-        if self.client_sock.recv(1024).decode == 'start':
+        while self._recieve_packet()['type'] != Game_Packet_Type.START_GAME:
             pass
 
         pygame.init()
         self._screen = pygame.display.set_mode(
             (400, 400)
         )
+
         pygame.display.set_caption('Tanks')
         pygame.key.set_repeat()  # key presses will not repeat
 
@@ -73,7 +79,6 @@ class Online_Game_Client:
         """
         while self._running:
             inputs = {  # all command types
-                'shooting': None,
                 'move x': None,
                 'move y': None,
                 'status': None
@@ -135,23 +140,45 @@ class Online_Game_Client:
         ser_data = json.dumps(vars(data))
         self.client_sock.send(ser_data.encode())
 
-    def _render_sprites(self, sprites: list):
+    def _render_sprites(self, sprites: list[tuple[Game_Objects, tuple[int, int]]]) -> None:
+        """
+        Renders all sprites in the given list
+        The list is a list of tuples with the object to render and its coords
+        ...
+        :param sprites: a list of all the sprites to draw on the screen and their coords
+        """
+
         for sprite, coords in sprites:
             self._draw_object(sprite, coords)
 
     def _draw_object(self, object: Game_Objects, coords: tuple[int, int]) -> None:
+        """
+        Draws the object at the given coords
+        ...
+        :param object: the object to load
+        :param coords: the coords to draw it at
+        """
+
         self._screen.blit(self._all_sprites[object], coords)
 
     def _request_sprites(self) -> None:
+        """
+        Sends the server a request for it to send the sprites to render
+        puts those sprites in the sprites_to_load variable
+        """
+
         self._send_data(
             Game_Packet(
                 type=Game_Packet_Type.RECIEVE_SPRITES
             )
         )
 
-        self.sprites_to_load = json.loads(
+        self.sprites_to_load = self._recieve_packet()['data']
+
+    def _recieve_packet(self) -> Game_Packet:
+        return json.loads(
             self.client_sock.recv(1024).decode()
-        )['data']
+        )
 
 
 def main():
