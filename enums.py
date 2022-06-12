@@ -12,16 +12,6 @@ class Player_Commands(str, Enum):  # inhereting from str to make serializeble
     STOP_MOVE_LEFT = 'stop move left'
     STOP_MOVE_RIGHT = 'stop move right'
 
-    SHOOT_UP = 'shoot up'
-    SHOOT_DOWN = 'shoot down'
-    SHOOT_LEFT = 'shoot left'
-    SHOOT_RIGHT = 'shoot right'
-
-    STOP_SHOOT_UP = 'stop shoot up'
-    STOP_SHOOT_DOWN = 'stop shoot down'
-    STOP_SHOOT_LEFT = 'stop shoot left'
-    STOP_SHOOT_RIGHT = 'stop shoot right'
-
     QUIT = 'quit'
 
 

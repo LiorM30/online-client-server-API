@@ -151,13 +151,12 @@ class Online_Game_Client:
 
     def _draw_object(self, object: Game_Objects, coords: tuple[int, int]) -> None:
         self._screen.blit(self._all_sprites[object], coords)
-    
+
     # def _request_sprites(self) -> None:
 
 
-
 def main():
-    client = Online_Game_Client('192.168.68.131', 3333)
+    client = Online_Game_Client('192.168.68.136', 3333)
     client.mainloop()
 
 

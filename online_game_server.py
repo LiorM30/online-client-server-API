@@ -129,8 +129,7 @@ class Online_Game_Server:
                             Request(val, player.ID)
                         )
                         print(val)
-                
-                
+                self._send_data(player.sock, self._sprites_to_send)
 
         except ConnectionResetError:
             self._logger.debug(f'Player {player.username} has disconnected')
@@ -196,13 +195,13 @@ class Online_Game_Server:
                 )
             self._lock.release()
 
-            for ID, player in self._players.items():
-                self._send_data(player.sock, self._sprites_to_send)
+            # for ID, player in self._players.items():
+            #     self._send_data(player.sock, self._sprites_to_send)
             sleep(1/30)
 
 
 def main():
-    server = Online_Game_Server('192.168.68.131', 3333)
+    server = Online_Game_Server('192.168.68.136', 3333)
     server.mainloop()
 
 
