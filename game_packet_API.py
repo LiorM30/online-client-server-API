@@ -6,6 +6,8 @@ class Game_Packet_Type(str, Enum):
     RECIEVE_SPRITES = 'recieve sprites'
     PLAYER_INPUTS = 'player inputs'
 
+    SPRITES_TO_RENDER = 'sprites to render'
+
 
 @dataclass
 class Game_Packet():

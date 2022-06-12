@@ -1,4 +1,3 @@
-import pickle
 import json
 import socket
 import threading
@@ -10,6 +9,7 @@ import argparse
 
 from enums import Directions, Player_Commands, Game_Objects
 from sprites import Player as Player_Sprite
+from game_packet_API import Game_Packet, Game_Packet_Type
 
 
 @dataclass
@@ -26,7 +26,7 @@ class Request:
 
 
 class Online_Game_Server:
-    def __init__(self, IP, port) -> None:
+    def __init__(self, port) -> None:
         self._parser = argparse.ArgumentParser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
@@ -48,7 +48,7 @@ class Online_Game_Server:
         self._logger = logging.getLogger()
 
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.bind((IP, port))
+        self.server_sock.bind((socket.gethostbyname(socket.gethostname()), port))
         self._logger.debug('Server is up and running')
 
         self._players = {}
@@ -114,28 +114,36 @@ class Online_Game_Server:
         """
         try:
             while True:
-                # message = pickle.loads(player.sock.recv(1024))
-                message = json.loads(player.sock.recv(1024).decode())
-                if message['status'] == Player_Commands.QUIT:
-                    player.sock.close()
-                    self._logger.debug(
-                        f'Client disconnected, name: {player.username}'
-                    )
-                    break
-
-                for key, val in message.items():
-                    if val is not None:
-                        self._requests.append(
-                            Request(val, player.ID)
+                packet = json.loads(player.sock.recv(1024).decode())
+                if packet['type'] == Game_Packet_Type.PLAYER_INPUTS:
+                    if packet['data']['status'] == Player_Commands.QUIT:
+                        player.sock.close()
+                        self._logger.debug(
+                            f'Client disconnected, name: {player.username}'
                         )
-                        print(val)
-                self._send_data(player.sock, self._sprites_to_send)
+                        break
+
+                    for key, val in packet['data'].items():
+                        if val is not None:
+                            self._requests.append(
+                                Request(val, player.ID)
+                            )
+                            print(val)
+
+                elif packet['type'] == Game_Packet_Type.RECIEVE_SPRITES:
+                    self._send_data(
+                        player.sock,
+                        Game_Packet(
+                            type=Game_Packet_Type.SPRITES_TO_RENDER,
+                            data=self._sprites_to_send
+                        )
+                    )
 
         except ConnectionResetError:
             self._logger.debug(f'Player {player.username} has disconnected')
             self._players.pop(player.ID)
 
-    def _send_data(self, client: socket.socket, data: dict) -> None:
+    def _send_data(self, client: socket.socket, data: Game_Packet) -> None:
         """
         Sends data to the client
         The data is a dictionary of all sprites and their location
@@ -143,10 +151,8 @@ class Online_Game_Server:
         :param client: the client to send to
         :param data: the data to send
         """
-        ser_data = json.dumps({'game': data})
+        ser_data = json.dumps(vars(data))
         client.send(ser_data.encode())
-        self._num_of_sends += 1
-        print(self._num_of_sends)
 
     def mainloop(self) -> None:
         """
@@ -184,16 +190,16 @@ class Online_Game_Server:
 
                 self._requests.clear()  # clear events list after iterating through them
 
-            self._lock.acquire()  # locking all threads so they dont send the clients unupdated sprites/not the full list
             for ID, sprite in self._player_sprites.items():
                 sprite.update()
 
-            self._sprites_to_send.clear()
+            new_sprites_to_send = []
             for player_ID, sprite in self._player_sprites.items():
-                self._sprites_to_send.append(
+                new_sprites_to_send.append(
                     [Game_Objects.Player, list(sprite.get_coords())]
                 )
-            self._lock.release()
+
+            self._sprites_to_send = new_sprites_to_send.copy()
 
             # for ID, player in self._players.items():
             #     self._send_data(player.sock, self._sprites_to_send)
@@ -201,7 +207,7 @@ class Online_Game_Server:
 
 
 def main():
-    server = Online_Game_Server('192.168.68.136', 3333)
+    server = Online_Game_Server(3333)
     server.mainloop()
 
 
